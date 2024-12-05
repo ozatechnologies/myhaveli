@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Havelis</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        .haveli-card {
+            transition: transform 0.2s;
+            height: 100%;
+        }
+        .haveli-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .haveli-image {
+            height: 200px;
+            object-fit: cover;
+        }
+        .manorath-list {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .search-box {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <!-- Search Section -->
+        <div class="search-box">
+            <h4 class="mb-4">Find Havelis</h4>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchName" placeholder="Search by haveli name">
+                </div>
+                <div class="col-md-4">
+                    <input type="text" class="form-control" id="searchLocation" placeholder="Search by location">
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100" onclick="searchHavelis()">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="row g-4" id="haveliContainer">
+            <!-- Haveli cards will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+
+    <script>
+        // Initialize Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBPyEBGDaOFeWNI7HnYmRe1XMjTl39MEv0",
+            authDomain: "bangtanmessenger-e2c5b.firebaseapp.com",
+            databaseURL: "https://bangtanmessenger-e2c5b-default-rtdb.firebaseio.com",
+            projectId: "bangtanmessenger-e2c5b",
+            storageBucket: "bangtanmessenger-e2c5b.appspot.com",
+            messagingSenderId: "356178426997",
+            appId: "1:356178426997:web:9bb3fb48a1c773efb45dd8",
+            measurementId: "G-3YYJK8B644"
+        };
+        firebase.initializeApp(firebaseConfig);
+
+        let havelis = [];
+
+        // Load all havelis initially
+        async function loadHavelis() {
+            try {
+                const snapshot = await firebase.database().ref('havelis').once('value');
+                havelis = [];
+                snapshot.forEach(child => {
+                    havelis.push({
+                        id: child.key,
+                        ...child.val()
+                    });
+                });
+                displayHavelis(havelis);
+            } catch (error) {
+                console.error('Error loading havelis:', error);
+                alert('Failed to load havelis. Please try again.');
+            }
+        }
+
+        // Search functionality
+        function searchHavelis() {
+            const nameQuery = document.getElementById('searchName').value.toLowerCase();
+            const locationQuery = document.getElementById('searchLocation').value.toLowerCase();
+
+            const filtered = havelis.filter(haveli => {
+                const matchName = haveli.name.toLowerCase().includes(nameQuery);
+                const matchLocation = haveli.location.toLowerCase().includes(locationQuery);
+                return (!nameQuery || matchName) && (!locationQuery || matchLocation);
+            });
+
+            displayHavelis(filtered);
+        }
+
+        // Display havelis
+        function displayHavelis(haveliList) {
+            const container = document.getElementById('haveliContainer');
+            container.innerHTML = '';
+
+            if (haveliList.length === 0) {
+                container.innerHTML = `
+                    <div class="col-12 text-center">
+                        <h5 class="text-muted">No havelis found matching your search criteria</h5>
+                    </div>
+                `;
+                return;
+            }
+
+            haveliList.forEach(haveli => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 col-lg-4';
+                card.innerHTML = `
+                    <div class="card haveli-card">
+                        <img src="${haveli.images?.[0] || 'https://via.placeholder.com/300x200?text=No+Image'}" 
+                             class="card-img-top haveli-image" alt="${haveli.name}">
+                        <div class="card-body">
+                            <h5 class="card-title">${haveli.name}</h5>
+                            <p class="card-text">
+                                <i class="bi bi-geo-alt"></i> ${haveli.location}
+                            </p>
+                            ${haveli.manoraths?.length ? `
+                                <div class="manorath-list">
+                                    <p class="mb-2"><strong>Available Manoraths:</strong></p>
+                                    <ul class="list-unstyled">
+                                        ${haveli.manoraths.map(m => `
+                                            <li>
+                                                <i class="bi bi-dot"></i> ${m.name} - ₹${m.price.toLocaleString('en-IN')}
+                                                <br><small class="text-muted">${m.description || ''}</small>
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            ` : '<p class="text-muted">No Manoraths available</p>'}
+                        </div>
+                        <div class="card-footer bg-transparent">
+                            <button class="btn btn-primary w-100" 
+                                    onclick="bookManorath('${haveli.contactNumber}')">
+                                <i class="bi bi-telephone"></i> Book Manorath
+                            </button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Book Manorath function
+        function bookManorath(contactNumber) {
+            if (!contactNumber) {
+                alert('Contact number not available for this haveli');
+                return;
+            }
+            window.location.href = `tel:${contactNumber}`;
+        }
+
+        // Load havelis when page loads
+        document.addEventListener('DOMContentLoaded', loadHavelis);
+    </script>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
